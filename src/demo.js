@@ -1,0 +1,20 @@
+const date=(days=0)=>new Date(Date.now()-days*86400000).toISOString();
+export const categories=['ألواح شمسية','انفرترات','بطاريات','هياكل وملحقات','منظومات متكاملة'];
+export const demo={role:'admin',email:'',settings:{name:'الكفيل لحلول الطاقة',currency:'د.ع',address:'كربلاء المقدسة، العراق',phone:'',logo:''},products:[
+{id:1,name:'لوح شمسي LONGi Hi-MO 6',sku:'PV-LG-580',category:'ألواح شمسية',price:185000,cost:142000,stock:248,minimum:30,unit:'قطعة'},
+{id:2,name:'انفرتر هجين Deye — 6kW',sku:'INV-DY-06',category:'انفرترات',price:1250000,cost:980000,stock:8,minimum:10,unit:'قطعة'},
+{id:3,name:'بطارية ليثيوم Felicity — 200Ah',sku:'BAT-FL-200',category:'بطاريات',price:1875000,cost:1480000,stock:36,minimum:8,unit:'قطعة'},
+{id:4,name:'منظومة منزلية متكاملة — 10kW',sku:'SYS-HM-10',category:'منظومات متكاملة',price:8750000,cost:6900000,stock:12,minimum:3,unit:'منظومة'},
+{id:5,name:'كيبل شمسي نحاسي — 6mm²',sku:'CBL-DC-06',category:'هياكل وملحقات',price:2500,cost:1800,stock:850,minimum:100,unit:'متر'},
+{id:6,name:'هيكل تثبيت ألواح مجلفن',sku:'STR-GL-04',category:'هياكل وملحقات',price:95000,cost:67000,stock:6,minimum:10,unit:'طقم'},
+{id:7,name:'لوح شمسي Jinko Tiger — 610W',sku:'PV-JK-610',category:'ألواح شمسية',price:210000,cost:168000,stock:175,minimum:30,unit:'قطعة'},
+{id:8,name:'انفرتر صناعي Huawei — 100kW',sku:'INV-HW-100',category:'انفرترات',price:14500000,cost:11600000,stock:3,minimum:4,unit:'قطعة'}],
+customers:[{id:1,name:'شركة أرض النور للمقاولات',phone:'',address:'بغداد'},{id:2,name:'أحمد محمد الحسيني',phone:'',address:'كربلاء المقدسة'},{id:3,name:'مجمع الكوثر السكني',phone:'',address:'النجف الأشرف'},{id:4,name:'علي كريم الشمري',phone:'',address:'بابل'},{id:5,name:'مزرعة الرافدين',phone:'',address:'كربلاء المقدسة'}],
+documents:[
+{id:1,number:'INV-2026-00128',kind:'invoice',customerId:1,customerName:'شركة أرض النور للمقاولات',items:[{productId:1,name:'لوح شمسي LONGi Hi-MO 6',quantity:20,price:185000,cost:142000}],total:3700000,paid:3700000,status:'paid',createdAt:date(),currency:'د.ع'},
+{id:2,number:'INV-2026-00127',kind:'invoice',customerId:2,customerName:'أحمد محمد الحسيني',items:[{productId:4,name:'منظومة منزلية متكاملة — 10kW',quantity:1,price:8750000,cost:6900000}],total:8750000,paid:5000000,status:'partial',createdAt:date(),currency:'د.ع'},
+{id:3,number:'INV-2026-00126',kind:'invoice',customerId:3,customerName:'مجمع الكوثر السكني',items:[{productId:3,name:'بطارية ليثيوم Felicity — 200Ah',quantity:12,price:1875000,cost:1480000}],total:22500000,paid:22500000,status:'paid',createdAt:date(1),currency:'د.ع'},
+{id:4,number:'INV-2026-00125',kind:'invoice',customerId:4,customerName:'علي كريم الشمري',items:[{productId:2,name:'انفرتر هجين Deye — 6kW',quantity:2,price:1250000,cost:980000}],total:2500000,paid:0,status:'unpaid',createdAt:date(2),currency:'د.ع'},
+{id:5,number:'QT-2026-00043',kind:'quote',customerId:5,customerName:'مزرعة الرافدين',items:[{productId:8,name:'انفرتر صناعي Huawei — 100kW',quantity:1,price:14500000,cost:11600000}],total:14500000,paid:0,status:'active',createdAt:date(2),currency:'د.ع'},
+...Array.from({length:7},(_,i)=>({id:10+i,number:`INV-2026-00${120-i}`,kind:'invoice',customerId:1,customerName:'شركة أرض النور للمقاولات',items:[{productId:1,name:'لوح شمسي LONGi Hi-MO 6',quantity:10+i,price:185000,cost:142000}],total:(10+i)*185000,paid:(10+i)*185000,status:'paid',createdAt:date(5+i*4),currency:'د.ع'}))],
+entries:[{id:1,kind:'income',description:'تحصيل فاتورة شركة أرض النور',amount:3700000,documentId:1,createdAt:date()},{id:2,kind:'income',description:'دفعة منظومة منزلية',amount:5000000,documentId:2,createdAt:date()},{id:3,kind:'income',description:'تحصيل مجمع الكوثر',amount:22500000,documentId:3,createdAt:date(1)},{id:4,kind:'expense',description:'نقل وتوريد مواد إلى المخزن',amount:850000,createdAt:date(2)}],members:[{id:1,name:'مدير النظام',email:'admin@example.org',role:'admin'},{id:2,name:'موظف المبيعات',email:'sales@example.org',role:'sales'}],audit:[{id:1,actor:'مدير النظام',action:'إنشاء فاتورة مبيعات لشركة أرض النور',createdAt:date()},{id:2,actor:'أمين المخزن',action:'استلام شحنة ألواح شمسية جديدة',createdAt:date(1)}],movements:[]};
