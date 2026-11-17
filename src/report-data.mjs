@@ -1,3 +1,4 @@
+import {entryCurrency,unknownCurrency} from './business-data.mjs';
 export const reportTypes = {
  summary: 'التقرير الشامل', sales: 'تفاصيل المبيعات', quotes: 'عروض الأسعار', items: 'مبيعات المواد', customers: 'كشف حساب عميل', aging: 'أعمار المستحقات', inventory: 'جرد المخزن الحالي', movements: 'حركات مادة', cash: 'القبض والصرف', audit: 'سجل الإجراءات'
 };
@@ -11,7 +12,7 @@ export function makeReport(data, f, now = new Date()) {
  const docs = data.documents.filter(d => d.currency === f.currency && inDate(d) && (!f.customer || String(d.customerId) === f.customer) && (!f.status || d.status === f.status) && (!f.product || d.items.some(i => String(i.productId) === f.product)));
  const invoices = docs.filter(d => d.kind === 'invoice');
  const financial = ['admin','finance'].includes(data.role);
- const entries = data.entries.filter(inDate);
+ const entries = data.entries.filter(e=>inDate(e)&&entryCurrency(e,data.documents)===f.currency);
  const products = data.products.filter(p => !f.product || String(p.id) === f.product);
  const amount = n => number(n).toLocaleString('en-US', {maximumFractionDigits:2});
  const date = d => new Date(d).toLocaleDateString('ar-IQ');
@@ -53,8 +54,12 @@ export function makeReport(data, f, now = new Date()) {
  if(f.type==='inventory') add('الرصيد الحالي — لا يمثل جرداً تاريخياً',['الرمز','المادة','الفئة','الرصيد','الوحدة','حد الطلب','سعر البيع',...(financial?['قيمة الكلفة']:[])],products.map(p=>[p.sku,p.name,p.category,p.stock,p.unit,p.minimum,amount(p.price),...(financial?[amount(p.stock*number(p.cost))]:[])]));
  if(f.type==='movements') add('حركات المخزن خلال الفترة',['التاريخ','المادة','الوارد','الصادر','السبب','المنفذ'],data.movements.filter(m=>inDate(m)&&(!f.product||String(m.productId)===f.product)).map(m=>[date(m.createdAt),data.products.find(p=>p.id===m.productId)?.name||m.productId,m.quantity>0?m.quantity:'—',m.quantity<0?-m.quantity:'—',m.reason,m.createdBy||'—']));
  if(['summary','cash'].includes(f.type)&&financial) {
-  add('التدفق النقدي التشغيلي خلال الفترة',['المؤشر','القيمة'],[['المقبوضات',amount(sum(entries.filter(e=>e.kind==='income'),e=>number(e.amount)))],['المصروفات',amount(sum(entries.filter(e=>e.kind==='expense'),e=>number(e.amount)))],['صافي التدفق النقدي',amount(sum(entries,e=>(e.kind==='income'?1:-1)*number(e.amount)))]]);
+  add(`التدفق النقدي التشغيلي خلال الفترة — ${f.currency}`,['المؤشر','القيمة'],[['المقبوضات',amount(sum(entries.filter(e=>e.kind==='income'),e=>number(e.amount)))],['المصروفات',amount(sum(entries.filter(e=>e.kind==='expense'),e=>number(e.amount)))],['صافي التدفق النقدي',amount(sum(entries,e=>(e.kind==='income'?1:-1)*number(e.amount)))]]);
   if(f.type==='cash')add('تفاصيل السندات',['التاريخ','النوع','الوصف','المبلغ','المرجع'],entries.map(e=>[date(e.createdAt),e.kind==='income'?'قبض':'صرف',e.description,amount(e.amount),data.documents.find(d=>d.id===e.documentId)?.number||'مستقل']));
+ }
+ if(f.type==='summary'&&financial&&f.currency!==unknownCurrency){
+  const unknown=data.entries.filter(e=>inDate(e)&&entryCurrency(e,data.documents)===unknownCurrency);
+  if(unknown.length)add('سندات قديمة بعملة غير محددة — مستبعدة من المجاميع',['التاريخ','الوصف','المبلغ','العملة'],unknown.map(e=>[date(e.createdAt),e.description,amount(e.amount),unknownCurrency]));
  }
  if(f.type==='audit')add('سجل الإجراءات خلال الفترة',['التاريخ','المنفذ','الإجراء'],data.audit.filter(inDate).map(a=>[new Date(a.createdAt).toLocaleString('ar-IQ'),a.actor,a.action]));
  return {sections,sales,due,profit,count:invoices.length};

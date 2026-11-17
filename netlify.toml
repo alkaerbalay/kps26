@@ -15,3 +15,15 @@ for = "/*"
 X-Content-Type-Options = "nosniff"
 Referrer-Policy = "strict-origin-when-cross-origin"
 X-Frame-Options = "DENY"
+
+# The legacy plugin opens Vite's HTML as file:// and its bundled browser times
+# out here. It cannot audit the rendered React app. Use Lighthouse's HTTP audit.
+[[plugins]]
+package = "netlify-plugin-a11y"
+[plugins.inputs]
+checkPaths = []
+
+[[plugins]]
+package = "@netlify/plugin-lighthouse"
+[plugins.inputs]
+audits = [{ path = "/" }]

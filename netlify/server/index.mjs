@@ -6,6 +6,7 @@ import { db } from '../../db/index.mjs';
 import * as t from '../../db/schema.ts';
 import { randomUUID } from 'node:crypto';
 import { verifySession } from './session.mjs';
+import { operation } from './operations.mjs';
 const app = new Hono();
 const roles=['admin','sales','warehouse','finance'];
 const can=(role,section)=>role==='admin'||({sales:['customers','documents'],warehouse:['products','movements'],finance:['entries','documents']}[role]||[]).includes(section);
@@ -64,7 +65,7 @@ app.put('/api/customers/:id',async c=>{
 app.post('/api/stock',async c=>{
  if(!can(c.get('role'),'products'))fail('ليست لديك الصلاحية',403);
  const b=await c.req.json();const quantity=whole(b.quantity);if(!quantity||!str(b.reason))fail('حدد الكمية وسبب التوريد');
- await db.transaction(async tx=>{const [p]=await tx.update(t.products).set({stock:sql`${t.products.stock} + ${quantity}`}).where(eq(t.products.id,whole(b.productId))).returning();if(!p)fail('المادة غير موجودة',404);await tx.insert(t.movements).values({productId:p.id,quantity,reason:str(b.reason),createdBy:c.get('actor')});await log(tx,c.get('actor'),`توريد ${quantity} من ${p.name}`)});
+ await operation(db,t.operations,c,b,async tx=>{const [p]=await tx.update(t.products).set({stock:sql`${t.products.stock} + ${quantity}`}).where(eq(t.products.id,whole(b.productId))).returning();if(!p)fail('المادة غير موجودة',404);await tx.insert(t.movements).values({productId:p.id,quantity,reason:str(b.reason),createdBy:c.get('actor')});await log(tx,c.get('actor'),`توريد ${quantity} من ${p.name}`);return {ok:true}});
  return c.json({ok:true});
 });
 app.post('/api/customers',async c=>{
@@ -88,18 +89,18 @@ async function createDocument(tx,b,actor){
  const [settings]=await tx.select().from(t.settings).where(eq(t.settings.id,1));
  const number=`${b.kind==='invoice'?'INV':'QT'}-${new Date().getFullYear()}-${randomUUID().slice(0,8).toUpperCase()}`;
  const [doc]=await tx.insert(t.documents).values({number,kind:b.kind,customerId:customer.id,customerName:customer.name,items,total:String(total),paid:String(paid),status:b.kind==='quote'?'active':paid===total?'paid':paid?'partial':'unpaid',notes:str(b.notes,2000),currency:settings?.currency||'د.ع',createdBy:actor}).returning();
- if(paid)await tx.insert(t.entries).values({kind:'income',description:`تحصيل ${number}`,amount:String(paid),documentId:doc.id,createdBy:actor});
+ if(paid)await tx.insert(t.entries).values({kind:'income',description:`تحصيل ${number}`,amount:String(paid),currency:doc.currency,documentId:doc.id,createdBy:actor});
  await log(tx,actor,`إنشاء ${b.kind==='invoice'?'فاتورة':'عرض سعر'} ${number}`);return doc;
 }
-app.post('/api/documents',async c=>{if(!can(c.get('role'),'documents')||c.get('role')==='finance')fail('ليست لديك صلاحية إنشاء المبيعات',403);const b=await c.req.json();return c.json(publicDoc(await db.transaction(tx=>createDocument(tx,b,c.get('actor'))),c.get('role')),201)});
+app.post('/api/documents',async c=>{if(!can(c.get('role'),'documents')||c.get('role')==='finance')fail('ليست لديك صلاحية إنشاء المبيعات',403);const b=await c.req.json();return c.json(publicDoc(await operation(db,t.operations,c,b,tx=>createDocument(tx,b,c.get('actor'))),c.get('role')),201)});
 app.post('/api/documents/:id/convert',async c=>{
  if(!['admin','sales'].includes(c.get('role')))fail('ليست لديك الصلاحية',403);
- const doc=await db.transaction(async tx=>{const [q]=await tx.select().from(t.documents).where(eq(t.documents.id,whole(c.req.param('id')))).for('update');if(!q||q.kind!=='quote'||q.status!=='active')fail('عرض السعر غير متاح للتحويل');const d=await createDocument(tx,{...q,kind:'invoice',paid:0},c.get('actor'));await tx.update(t.documents).set({status:'converted'}).where(eq(t.documents.id,q.id));return d});return c.json(publicDoc(doc,c.get('role')));
+ const doc=await operation(db,t.operations,c,{},async tx=>{const [q]=await tx.select().from(t.documents).where(eq(t.documents.id,whole(c.req.param('id')))).for('update');if(!q||q.kind!=='quote'||q.status!=='active')fail('عرض السعر غير متاح للتحويل');const d=await createDocument(tx,{...q,kind:'invoice',paid:0},c.get('actor'));await tx.update(t.documents).set({status:'converted'}).where(eq(t.documents.id,q.id));return d});return c.json(publicDoc(doc,c.get('role')));
 });
 app.post('/api/entries',async c=>{
  if(!can(c.get('role'),'entries'))fail('ليست لديك صلاحية العمليات المالية',403);
  const b=await c.req.json();const amount=Math.round(num(b.amount,0.01)*100)/100;if(!['income','expense'].includes(b.kind)||!str(b.description))fail('أكمل نوع الحركة ووصفها');
- await db.transaction(async tx=>{let documentId=null;if(b.documentId){if(b.kind!=='income')fail('المصروف لا يرتبط بتحصيل فاتورة');const [d]=await tx.select().from(t.documents).where(eq(t.documents.id,whole(b.documentId))).for('update');if(!d||d.kind!=='invoice')fail('الفاتورة غير موجودة');const paid=(Math.round(Number(d.paid)*100)+Math.round(amount*100))/100;if(paid>Number(d.total))fail('المبلغ يتجاوز المتبقي على الفاتورة');await tx.update(t.documents).set({paid:String(paid),status:paid===Number(d.total)?'paid':'partial'}).where(eq(t.documents.id,d.id));documentId=d.id}await tx.insert(t.entries).values({kind:b.kind,amount:String(amount),description:str(b.description),documentId,createdBy:c.get('actor')});await log(tx,c.get('actor'),`تسجيل حركة مالية: ${str(b.description)}`)});return c.json({ok:true});
+ await operation(db,t.operations,c,b,async tx=>{const [settings]=await tx.select().from(t.settings).where(eq(t.settings.id,1));let currency=settings?.currency||'د.ع';let documentId=null;if(b.documentId){if(b.kind!=='income')fail('المصروف لا يرتبط بتحصيل فاتورة');const [d]=await tx.select().from(t.documents).where(eq(t.documents.id,whole(b.documentId))).for('update');if(!d||d.kind!=='invoice')fail('الفاتورة غير موجودة');const paid=(Math.round(Number(d.paid)*100)+Math.round(amount*100))/100;if(paid>Number(d.total))fail('المبلغ يتجاوز المتبقي على الفاتورة');await tx.update(t.documents).set({paid:String(paid),status:paid===Number(d.total)?'paid':'partial'}).where(eq(t.documents.id,d.id));documentId=d.id;currency=d.currency}if(b.currency!==currency)fail('تغيرت عملة العملية. راجع العملة والمبلغ ثم أعد المحاولة.',409);await tx.insert(t.entries).values({kind:b.kind,amount:String(amount),currency,description:str(b.description),documentId,createdBy:c.get('actor')});await log(tx,c.get('actor'),`تسجيل حركة مالية: ${str(b.description)}`);return {ok:true}});return c.json({ok:true});
 });
 app.put('/api/settings',async c=>{if(c.get('role')!=='admin')fail('للمدير فقط',403);const b=await c.req.json();const data={name:str(b.name,100),currency:str(b.currency,20),phone:str(b.phone,40),address:str(b.address),logo:str(b.logo,300)};if(!data.name||!data.currency)fail('الاسم والعملة مطلوبان');if(data.logo&&!/^https:\/\//.test(data.logo)&&!/^\/api\/logo\/[a-f0-9-]+\.(png|jpg|webp)$/.test(data.logo))fail('استخدم رابط HTTPS أو ارفع الشعار من الجهاز');await db.transaction(async tx=>{await tx.insert(t.settings).values({id:1,...data}).onConflictDoUpdate({target:t.settings.id,set:data});await log(tx,c.get('actor'),'تحديث إعدادات المؤسسة')});return c.json({ok:true})});
 app.post('/api/members',async c=>{if(c.get('role')!=='admin')fail('للمدير فقط',403);const b=await c.req.json();const email=str(b.email,200).toLowerCase(),name=str(b.name,100),role=b.role;if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||!name||!roles.includes(role))fail('تحقق من بيانات الموظف');await db.transaction(async tx=>{await tx.insert(t.members).values({email,name,role}).onConflictDoUpdate({target:t.members.email,set:{name,role}});await log(tx,c.get('actor'),`تحديث صلاحية ${email}: ${role}`)});return c.json({ok:true})});

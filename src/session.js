@@ -1,4 +1,5 @@
 import {getUser,refreshSession} from '@netlify/identity';
+import {authenticatedRequester} from './request-attempts.mjs';
 
 let preparing;
 // Share refresh work between polling, focus events, and user actions.
@@ -10,7 +11,6 @@ async function prepareSession(){
  await preparing;
 }
 
-export async function authenticatedFetch(url,options={}){
- await prepareSession();
- return fetch(url,{...options,credentials:'same-origin',cache:'no-store'});
-}
+const client=authenticatedRequester({prepare:prepareSession});
+export const authenticatedFetch=(url,options)=>client.fetch(url,options);
+export const clearRequestAttempts=()=>client.clear();
