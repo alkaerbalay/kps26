@@ -94,3 +94,11 @@ Validation: `node --test tests/*.test.mjs` passed 27 tests, including uncertain-
 ## HTML validation
 
 The document shell uses an uppercase `DOCTYPE` and HTML void elements without XML-style closing slashes. These source corrections address all 12 errors reported by the deployment HTML validator; the validator remains enabled. The same installed `html-validate` executable passed against `index.html`. The hosting pipeline validates the generated output; no local build was run.
+
+## Invitation session repair
+
+Invitation acceptance now follows `acceptInvite` with the SDK's public `login` operation before requesting private data. In the installed SDK, accepting an invitation does not write the API session cookies; calling `getUser` at that point can clear the incomplete session. If password setup succeeds but login fails, the interface returns to ordinary login and explains that the invitation must not be reused. Passwords remain transient form inputs and are never stored by application code. Existing-password login no longer imposes the new-password minimum length; Identity validates the credentials. New-password forms retain their existing minimum.
+
+The reported account was confirmed and invited, but had no Identity admin role. No membership existed in the database available to this preview. These are separate from credential verification: a project owner must grant the first administrator the server-controlled `admin` role through the project Identity user details, or an existing administrator must add the appropriate team membership. Production membership was not verified. The repair does not grant access automatically or bypass remote JWT verification.
+
+Validation: all 30 tests passed, including invitation completion ordering, rejection, and login failure after acceptance. JSX parsing and diff checks passed. The Identity activation step completed. Deployment and an actual account login still require runtime validation; no local build was run.
