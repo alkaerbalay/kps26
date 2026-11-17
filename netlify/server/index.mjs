@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { verifyIdentity } from './identity.mjs';
 import { bodyLimit } from 'hono/body-limit';
 import { getStore } from '@netlify/blobs';
 import { eq, desc, sql } from 'drizzle-orm';
@@ -20,10 +21,9 @@ app.use('/api/*',async(c,next)=>{
  if(c.req.method!=='GET'&&c.req.header('Origin')!==new URL(c.req.url).origin) return c.json({error:'مصدر الطلب غير مسموح'},403);
  const cookie=c.req.header('Cookie')||'';const token=cookie.split(';').map(x=>x.trim()).find(x=>x.startsWith('nf_jwt='))?.slice(7);
  if(!token)return c.json({error:'سجّل الدخول للوصول إلى بيانات العمل'},401);
- const base=process.env.URL||'https://solar-energy-website-328b44.netlify.app';
- const response=await fetch(new URL('/.netlify/identity/user',base),{headers:{Authorization:`Bearer ${token}`},signal:AbortSignal.timeout(8000)});
- if(!response.ok)return c.json({error:'انتهت الجلسة، يرجى تسجيل الدخول'},401);
- const user=await response.json();if(!user.email||!user.confirmed_at)return c.json({error:'يجب تأكيد البريد الإلكتروني'},403);
+ const verified=await verifyIdentity(token);
+ if(verified.error)return c.json({error:verified.error},verified.status);
+ const {user}=verified;
  const email=user.email.toLowerCase(); const [member]=await db.select().from(t.members).where(eq(t.members.email,email));
  const role=user.app_metadata?.roles?.includes('admin')?'admin':member?.role;
  if(!roles.includes(role))return c.json({error:'حسابك بانتظار منح الصلاحية من المدير'},403);

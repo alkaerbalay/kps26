@@ -15,3 +15,16 @@ for = "/*"
 X-Content-Type-Options = "nosniff"
 Referrer-Policy = "strict-origin-when-cross-origin"
 X-Frame-Options = "DENY"
+
+# Pa11y 5 in this legacy plugin times out when opening the SPA as a local file.
+# An empty path list overrides its UI-installed default scan without hiding errors.
+# Lighthouse below audits the rendered site over HTTP after deployment instead.
+[[plugins]]
+package = "netlify-plugin-a11y"
+[plugins.inputs]
+checkPaths = []
+
+[[plugins]]
+package = "@netlify/plugin-lighthouse"
+[[plugins.inputs.audits]]
+path = "/"
