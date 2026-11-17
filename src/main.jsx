@@ -6,6 +6,7 @@ import {demo,categories} from './demo';
 import './styles.css';
 import Reports from './Reports';
 import LogoUpload from './LogoUpload';
+import {authenticatedFetch} from './session';
 const nav=[['overview','نظرة عامة',LayoutDashboard],['inventory','إدارة المخزن',Boxes],['sales','المبيعات',ShoppingCart],['quotes','عروض الأسعار',FileText],['invoices','الفواتير',Receipt],['finance','الإدارة المالية',Wallet],['customers','العملاء',Users],['reports','التقارير والتحليلات',BarChart3]];
 const roleNames={admin:'مدير النظام',sales:'موظف المبيعات',warehouse:'أمين المخزن',finance:'المحاسب'};
 const statusNames={paid:'مدفوعة',partial:'مدفوعة جزئياً',unpaid:'غير مدفوعة',active:'عرض نشط',converted:'تم التحويل'};
@@ -31,10 +32,10 @@ function App(){
  async function load(silent=false){
   if(loading.current)return false;
   const version=generation.current;loading.current=true;
-  try{if(!silent)setBusy(true);setSync('loading');await getUser();const r=await fetch('/api/state',{cache:'no-store'});const j=await r.json();if(version!==generation.current)return false;
-   if(!r.ok){if([401,403].includes(r.status)){generation.current++;setData(demo);setDemo(true);setPreview(false);setModal(null);setPage('overview');setAuthMsg(j.error);if(r.status===401)setSession(null)}throw Error(j.error)}
+  try{if(!silent)setBusy(true);setSync('loading');const r=await authenticatedFetch('/api/state');const j=await r.json();if(version!==generation.current)return false;
+   if(!r.ok){if([401,403].includes(r.status)){generation.current++;setData(demo);setDemo(true);setPreview(false);setModal(null);setPage('overview');setAuthMsg(j.error);if(r.status===401)setSession(null)}throw Object.assign(Error(j.error),{status:r.status})}
    setData(j);setDemo(false);setSync('ok');setSavedAt(new Date());return true;
-  }catch(e){if(version===generation.current)setSync('error');if(!silent)notify(e.message);return false}finally{loading.current=false;if(!silent)setBusy(false)}
+  }catch(e){if(version===generation.current){setSync('error');if(isDemo)setAuthMsg(e.message)}if(!silent)notify(e.message);return false}finally{loading.current=false;if(!silent)setBusy(false)}
  }
  async function signOut(exit=false){
   setBusy(true);try{await logout();generation.current++;setData(demo);setDemo(true);setSession(null);setPreview(false);setSavedAt(null);setSync('demo');setModal(null);setPage('overview');setSearch('');setNotifications(false);setAuthMsg('');setExited(exit);if(exit)window.close()}catch{notify('تعذر تسجيل الخروج. تحقق من الاتصال وأعد المحاولة.')}finally{setBusy(false)}
@@ -43,7 +44,7 @@ function App(){
  useEffect(()=>{if(isDemo)return;const id=setInterval(()=>{if(document.visibilityState==='visible'&&navigator.onLine)load(true)},15000);const on=()=>{if(document.visibilityState==='visible')load(true)},off=()=>setSync('error');document.addEventListener('visibilitychange',on);window.addEventListener('focus',on);window.addEventListener('online',on);window.addEventListener('offline',off);return()=>{clearInterval(id);document.removeEventListener('visibilitychange',on);window.removeEventListener('focus',on);window.removeEventListener('online',on);window.removeEventListener('offline',off)}},[isDemo]);
  useEffect(()=>{setFilter('الكل');setSearch('')},[page]);
  useEffect(()=>{if(!modal)return;const previous=document.activeElement,dialog=document.querySelector('[role=dialog]');const overflow=document.body.style.overflow;document.body.style.overflow='hidden';const focusable=()=>Array.from(dialog?.querySelectorAll('button:not(:disabled),input,select,a[href]')||[]);focusable()[0]?.focus();const key=e=>{if(e.key==='Escape')setModal(null);if(e.key==='Tab'){const all=focusable(),first=all[0],last=all[all.length-1];if(e.shiftKey&&document.activeElement===first){e.preventDefault();last?.focus()}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus()}}};document.addEventListener('keydown',key);return()=>{document.body.style.overflow=overflow;document.removeEventListener('keydown',key);previous?.focus?.()}},[modal]);
- async function mutate(path,body,method='POST'){if(isDemo){notify('أنت في العرض التوضيحي. سجّل الدخول لحفظ بيانات مؤسستك.');setModal({type:'auth'});return false}setBusy(true);try{if(!navigator.onLine)throw Error('يلزم الاتصال بالإنترنت لحفظ العملية. لم تُحفظ أي عملية دون اتصال.');await getUser();const r=await fetch(`/api/${path}`,{method,headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});const j=await r.json();if(!r.ok)throw Error(j.error);const refreshed=await load(true);notify(refreshed?'تم حفظ العملية ومزامنة البيانات بنجاح':'تم حفظ العملية. تعذر تحديث العرض؛ يُعاد التحديث عند عودة الاتصال.');return j}catch(e){notify(e.message);return false}finally{setBusy(false)}}
+ async function mutate(path,body,method='POST'){if(isDemo){notify('أنت في العرض التوضيحي. سجّل الدخول لحفظ بيانات مؤسستك.');setModal({type:'auth'});return false}setBusy(true);try{if(!navigator.onLine)throw Error('يلزم الاتصال بالإنترنت لحفظ العملية. لم تُحفظ أي عملية دون اتصال.');const r=await authenticatedFetch(`/api/${path}`,{method,headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});const j=await r.json();if(!r.ok)throw Object.assign(Error(j.error),{status:r.status});const refreshed=await load(true);notify(refreshed?'تم حفظ العملية ومزامنة البيانات بنجاح':'تم حفظ العملية. تعذر تحديث العرض؛ يُعاد التحديث عند عودة الاتصال.');return j}catch(e){notify(e.message);return false}finally{setBusy(false)}}
  function go(p){setPage(p);setMobile(false);setNotifications(false)}
  function open(type,extra={}){const access={product:['admin','warehouse'],stock:['admin','warehouse'],document:['admin','sales'],entry:['admin','finance'],customer:['admin','sales'],member:['admin'],revoke:['admin'],movements:['admin','warehouse']};if(!isDemo&&access[type]&&!access[type].includes(data.role)){notify('هذه العملية خارج صلاحيات حسابك');return}setModal({type,...extra})}
  const invoices=data.documents.filter(d=>d.kind==='invoice'),quotes=data.documents.filter(d=>d.kind==='quote');
