@@ -28,3 +28,11 @@ checkPaths = []
 package = "@netlify/plugin-lighthouse"
 [[plugins.inputs.audits]]
 path = "/"
+
+# Explicit ordering overrides the dashboard AMP plugin's position. It must run
+# before the local guard: AMP strips the module required to start this React SPA.
+[[plugins]]
+package = "netlify-plugin-amp-server-side-rendering"
+
+[[plugins]]
+package = "./netlify/plugins/preserve-react-entry"
