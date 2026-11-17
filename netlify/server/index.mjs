@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { verifyIdentity } from './identity.mjs';
+import { openAccess } from './access.mjs';
 import { bodyLimit } from 'hono/body-limit';
 import { getStore } from '@netlify/blobs';
 import { eq, desc, sql } from 'drizzle-orm';
@@ -7,7 +7,6 @@ import { db } from '../../db/index.mjs';
 import * as t from '../../db/schema.ts';
 import { randomUUID } from 'node:crypto';
 const app = new Hono();
-const roles=['admin','sales','warehouse','finance'];
 const can=(role,section)=>role==='admin'||({sales:['customers','documents'],warehouse:['products','movements'],finance:['entries','documents']}[role]||[]).includes(section);
 const fail=(message,status=400)=>{const e=new Error(message);e.status=status;throw e};
 const str=(v,max=500)=>typeof v==='string'?v.trim().slice(0,max):'';
@@ -16,27 +15,14 @@ const whole=v=>{const n=num(v);if(!Number.isInteger(n)||n>2000000000)fail('ال�
 const publicDoc=(doc,role)=>role==='sales'?{...doc,items:doc.items.map(({cost,...i})=>i)}:doc;
 const log=async(tx,actor,action)=>tx.insert(t.audit).values({actor,action});
 app.onError((err,c)=>c.json({error:err.status?err.message:'تعذر إكمال العملية. حاول مرة أخرى.'},err.status||500));
-app.use('/api/*',async(c,next)=>{
- c.header('Cache-Control','private, no-store');
- if(c.req.method!=='GET'&&c.req.header('Origin')!==new URL(c.req.url).origin) return c.json({error:'مصدر الطلب غير مسموح'},403);
- const cookie=c.req.header('Cookie')||'';const token=cookie.split(';').map(x=>x.trim()).find(x=>x.startsWith('nf_jwt='))?.slice(7);
- if(!token)return c.json({error:'سجّل الدخول للوصول إلى بيانات العمل'},401);
- const verified=await verifyIdentity(token);
- if(verified.error)return c.json({error:verified.error},verified.status);
- const {user}=verified;
- const email=user.email.toLowerCase(); const [member]=await db.select().from(t.members).where(eq(t.members.email,email));
- const role=user.app_metadata?.roles?.includes('admin')?'admin':member?.role;
- if(!roles.includes(role))return c.json({error:'حسابك بانتظار منح الصلاحية من المدير'},403);
- c.header('Cache-Control','private, no-store');
- c.set('actor',email);c.set('role',role); await next();
-});
+app.use('/api/*',openAccess);
 app.get('/api/state',async c=>{
  const result = await db.transaction(async tx=>{
  await tx.execute(sql`SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY`);
  const role=c.get('role');
  const [settings]=await tx.select().from(t.settings).where(eq(t.settings.id,1));
  const result={role,email:c.get('actor'),settings:settings||{name:'الكفيل لحلول الطاقة',currency:'د.ع',address:'كربلاء المقدسة، العراق',phone:'',logo:''}};
- for(const name of ['products','customers','documents','entries','members','audit','movements']){
+ for(const name of ['products','customers','documents','entries','audit','movements']){
   const allowed=role==='admin'||can(role,name)||(role==='sales'&&name==='products')||(role==='finance'&&['customers','products'].includes(name));
   result[name]=allowed?await tx.select().from(t[name]).orderBy(desc(t[name].id)):[];
  }
@@ -105,8 +91,6 @@ app.post('/api/entries',async c=>{
  await db.transaction(async tx=>{let documentId=null;if(b.documentId){if(b.kind!=='income')fail('المصروف لا يرتبط بتحصيل فاتورة');const [d]=await tx.select().from(t.documents).where(eq(t.documents.id,whole(b.documentId))).for('update');if(!d||d.kind!=='invoice')fail('الفاتورة غير موجودة');const paid=(Math.round(Number(d.paid)*100)+Math.round(amount*100))/100;if(paid>Number(d.total))fail('المبلغ يتجاوز المتبقي على الفاتورة');await tx.update(t.documents).set({paid:String(paid),status:paid===Number(d.total)?'paid':'partial'}).where(eq(t.documents.id,d.id));documentId=d.id}await tx.insert(t.entries).values({kind:b.kind,amount:String(amount),description:str(b.description),documentId,createdBy:c.get('actor')});await log(tx,c.get('actor'),`تسجيل حركة مالية: ${str(b.description)}`)});return c.json({ok:true});
 });
 app.put('/api/settings',async c=>{if(c.get('role')!=='admin')fail('للمدير فقط',403);const b=await c.req.json();const data={name:str(b.name,100),currency:str(b.currency,20),phone:str(b.phone,40),address:str(b.address),logo:str(b.logo,300)};if(!data.name||!data.currency)fail('الاسم والعملة مطلوبان');if(data.logo&&!/^https:\/\//.test(data.logo)&&!/^\/api\/logo\/[a-f0-9-]+\.(png|jpg|webp)$/.test(data.logo))fail('استخدم رابط HTTPS أو ارفع الشعار من الجهاز');await db.transaction(async tx=>{await tx.insert(t.settings).values({id:1,...data}).onConflictDoUpdate({target:t.settings.id,set:data});await log(tx,c.get('actor'),'تحديث إعدادات المؤسسة')});return c.json({ok:true})});
-app.post('/api/members',async c=>{if(c.get('role')!=='admin')fail('للمدير فقط',403);const b=await c.req.json();const email=str(b.email,200).toLowerCase(),name=str(b.name,100),role=b.role;if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||!name||!roles.includes(role))fail('تحقق من بيانات الموظف');await db.transaction(async tx=>{await tx.insert(t.members).values({email,name,role}).onConflictDoUpdate({target:t.members.email,set:{name,role}});await log(tx,c.get('actor'),`تحديث صلاحية ${email}: ${role}`)});return c.json({ok:true})});
-app.delete('/api/members/:id',async c=>{if(c.get('role')!=='admin')fail('للمدير فقط',403);const id=whole(c.req.param('id'));await db.transaction(async tx=>{const [member]=await tx.delete(t.members).where(eq(t.members.id,id)).returning();if(!member)fail('الموظف غير موجود',404);await log(tx,c.get('actor'),`إلغاء صلاحية ${member.email}`)});return c.json({ok:true})});
 app.use('/api/logo',bodyLimit({maxSize:600000,onError:c=>c.json({error:'حجم الشعار يجب ألا يتجاوز ٥١٢ كيلوبايت'},413)}));
 app.post('/api/logo',async c=>{
  if(c.get('role')!=='admin')fail('رفع الشعار متاح للمدير فقط',403);
