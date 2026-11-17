@@ -38,3 +38,8 @@
 }
 
 .sidebar{overflow-y:auto}
+
+.startup-screen{min-height:100dvh;display:grid;place-items:center;padding:24px;background:var(--bg,#f6f7f4)}
+.startup-card{width:min(100%,520px);text-align:center;padding:48px 28px;display:flex;align-items:center;flex-direction:column;gap:20px;color:#1e6b50}
+.startup-card h1{font-size:26px;margin:0;color:#243b33}
+.startup-card p{margin:0;line-height:1.9}
