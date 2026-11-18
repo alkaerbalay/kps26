@@ -5,3 +5,5 @@ dist/
 !.env.example
 .netlify/state.json
 .netlify/.env*
+.netlify/*
+!.netlify/results.md

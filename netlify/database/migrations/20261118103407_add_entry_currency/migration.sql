@@ -1,0 +1,1 @@
+ALTER TABLE "entries" ADD COLUMN "currency" text DEFAULT 'غير محددة' NOT NULL;

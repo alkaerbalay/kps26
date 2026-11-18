@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {makeReport,availableReports} from '../src/report-data.mjs';
+import {entryCurrency,currencyTotals} from '../src/currency.mjs';
 const data={role:'admin',settings:{currency:'د.ع'},products:[{id:1,name:'اسم حالي',sku:'A',category:'ألواح',price:'25',cost:'10',stock:8,minimum:2,unit:'قطعة'}],customers:[{id:1,name:'عميل'}],documents:[
  {id:1,number:'INV-1',kind:'invoice',customerId:1,customerName:'عميل',createdAt:'2026-10-01T12:00:00Z',currency:'د.ع',total:'100',paid:'40',status:'partial',items:[{productId:1,name:'اسم تاريخي',quantity:4,price:25,cost:10,unit:'قطعة'}]},
  {id:2,number:'INV-2',kind:'invoice',customerId:1,customerName:'عميل',createdAt:'2026-11-05T12:00:00Z',currency:'د.ع',total:'50',paid:'0',status:'unpaid',items:[{productId:1,name:'اسم تاريخي',quantity:2,price:25,cost:10,unit:'قطعة'}]},
@@ -15,3 +16,19 @@ test('sales reports omit profit columns and never offer financial reports',()=>{
 test('customer ledger includes receipts for invoices issued before the period',()=>{const r=makeReport(data,{...filters,type:'customers',customer:'1',from:'2026-11-01',to:'2026-11-15'});const rows=r.sections[1].rows;assert.equal(rows[0][6],'100');assert.equal(rows[1][4],'50');assert.equal(rows[2][5],'40');assert.equal(rows.at(-1)[6],'110')});
 test('aging uses invoice age and current outstanding balance',()=>{const r=makeReport(data,{...filters,type:'aging'},new Date('2026-11-16T12:00:00Z'));assert.equal(r.sections[0].rows[0][4],'60');assert.equal(r.sections[0].rows[1][3],'50')});
 test('inventory is current even when a historical date filter remains selected',()=>{const r=makeReport(data,{...filters,type:'inventory',from:'2030-01-01'});assert.equal(r.sections[0].rows[0][3],8)});
+test('cash totals isolate receipt currencies and legacy standalone uncertainty',()=>{
+ const mixed={...data,entries:[...data.entries.map(e=>({...e,currency:'غير محددة'})),{kind:'income',amount:'25',currency:'USD',createdAt:'2026-11-10T12:00:00Z'}]};
+ assert.equal(entryCurrency(mixed.entries[0],mixed),'د.ع');
+ assert.equal(entryCurrency(mixed.entries[1],mixed),'غير محددة');
+ const cash=currency=>makeReport(mixed,{...filters,type:'cash',currency}).sections[0].rows;
+ assert.equal(cash('د.ع')[0][1],'40');assert.equal(cash('د.ع')[1][1],'0');
+ assert.equal(cash('USD')[0][1],'25');assert.equal(cash('غير محددة')[1][1],'10');
+ assert.equal(currencyTotals(data.documents.filter(d=>d.kind==='invoice'),d=>d.total,d=>d.currency),'150 د.ع / 500 USD');
+});
+test('report end date follows the next local midnight across daylight saving changes',()=>{
+ const old=process.env.TZ;process.env.TZ='America/New_York';
+ try{
+  const dst={...data,documents:[{...data.documents[0],createdAt:'2026-03-09T04:30:00Z'}]};
+  assert.equal(makeReport(dst,{...filters,from:'2026-03-08',to:'2026-03-08'}).count,0);
+ }finally{if(old===undefined)delete process.env.TZ;else process.env.TZ=old}
+});

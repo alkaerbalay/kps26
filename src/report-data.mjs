@@ -1,3 +1,4 @@
+import {entryCurrency} from './currency.mjs';
 export const reportTypes = {
  summary: 'التقرير الشامل', sales: 'تفاصيل المبيعات', quotes: 'عروض الأسعار', items: 'مبيعات المواد', customers: 'كشف حساب عميل', aging: 'أعمار المستحقات', inventory: 'جرد المخزن الحالي', movements: 'حركات مادة', cash: 'القبض والصرف', audit: 'سجل الإجراءات'
 };
@@ -7,11 +8,12 @@ export function availableReports(role) {
 const number = v => Number(v) || 0;
 const sum = (rows, fn) => rows.reduce((s, r) => s + fn(r), 0);
 export function makeReport(data, f, now = new Date()) {
- const inDate = row => { const d = new Date(row.createdAt); return (!f.from || d >= new Date(`${f.from}T00:00:00`)) && (!f.to || d < new Date(new Date(`${f.to}T00:00:00`).getTime() + 86400000)); };
+ const end=f.to?new Date(`${f.to}T00:00:00`):null;if(end)end.setDate(end.getDate()+1);
+ const inDate = row => { const d = new Date(row.createdAt); return (!f.from || d >= new Date(`${f.from}T00:00:00`)) && (!end || d < end); };
  const docs = data.documents.filter(d => d.currency === f.currency && inDate(d) && (!f.customer || String(d.customerId) === f.customer) && (!f.status || d.status === f.status) && (!f.product || d.items.some(i => String(i.productId) === f.product)));
  const invoices = docs.filter(d => d.kind === 'invoice');
  const financial = ['admin','finance'].includes(data.role);
- const entries = data.entries.filter(inDate);
+ const entries = data.entries.filter(e=>inDate(e)&&entryCurrency(e,data)===f.currency);
  const products = data.products.filter(p => !f.product || String(p.id) === f.product);
  const amount = n => number(n).toLocaleString('en-US', {maximumFractionDigits:2});
  const date = d => new Date(d).toLocaleDateString('ar-IQ');
