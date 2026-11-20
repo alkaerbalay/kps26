@@ -77,9 +77,9 @@ The HTML entry document uses an uppercase `DOCTYPE` and HTML-style void elements
 
 The public site returned HTTP 200 with an empty React root and no application script. The dashboard-installed `netlify-plugin-amp-server-side-rendering` had converted Vite's ordinary HTML to AMP and removed the JavaScript module that mounts the interface, explaining the blank page and Lighthouse's NO_FCP result.
 
-The local `preserve-app-entry` build plugin captures Vite's entry in `onBuild` and restores it in `onPostBuild` if AMP conversion occurs. It runs after the dashboard-installed plugins and rejects entries missing the compiled application script. Unconverted HTML remains untouched. Dashboard plugin removal was denied by the API, so this repository-level protection handles the installed postprocessor without changing access controls or business data. Keep this plugin after HTML postprocessors.
+The local `preserve-app-entry` build plugin is registered at the end of `netlify.toml`. It captures Vite's entry in `onBuild`, before AMP postprocessing, and restores it in `onPostBuild` if the HTML has an AMP marker. It validates both the module script reference and the actual nonempty JavaScript file under the publish directory's `assets` folder. A missing script or asset fails deployment, including when another plugin removes the asset after capture. Unconverted HTML remains untouched but is still validated. A failed capture clears the previous snapshot, and restoration requires the same publish directory. Keep this plugin after HTML postprocessors.
 
-`node --test tests/app-entry.test.mjs` passed two regression tests. A separate temporary-fixture check using the installed AMP optimizer reproduced script removal and verified exact restoration. No application build was run locally. The hosting pipeline must validate the deployment; the already published page remains affected until a corrected deployment is published.
+`node --test tests/app-entry.test.mjs` passed five regression tests covering AMP restoration, missing and empty assets, unconverted HTML preservation, postprocessing damage, missing scripts, and stale snapshot prevention. Plugin syntax and whitespace checks passed. No application build was run locally; the hosting pipeline performs full build and deployment validation.
 
 ## Direct-access verification
 
