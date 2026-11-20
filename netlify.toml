@@ -28,3 +28,8 @@ checkPaths = []
 package = "@netlify/plugin-lighthouse"
 [[plugins.inputs.audits]]
 path = "/"
+
+# Keep this last: UI-installed HTML optimizers run before this local plugin.
+# AMP conversion removes React's module entrypoint from this non-AMP app.
+[[plugins]]
+package = "./netlify/plugins/preserve-react-entry"
