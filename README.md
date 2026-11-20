@@ -84,3 +84,11 @@ The local `preserve-app-entry` build plugin is registered at the end of `netlify
 ## Direct-access verification
 
 `node --test tests/workspace-access.test.mjs` covers access with no cookies, ignored stale Identity cookies, shared audit attribution, same-origin writes, cross-origin rejection, no-store responses, and direct client requests without write replay. JSX parsing and server syntax checks complement the regression tests. The hosting pipeline performs the full build and deployed database/Blob validation.
+
+## Request error handling
+
+Malformed JSON and non-object form payloads return an Arabic validation message with HTTP 400 before reaching business handlers. Multipart logo uploads remain supported. Duplicate unique values and invalid related records return HTTP 409; numeric overflow returns HTTP 400. Database query text and driver details are not exposed.
+
+Client requests use a 15-second timeout, show Arabic connection feedback, and never replay writes automatically. Connection failures instruct users to verify the transaction state before retrying because the server may already have saved it. A synchronous save guard prevents overlapping business mutations from rapid submissions in the same interface. This guard is not a cross-device idempotency guarantee.
+
+All 19 tests passed with `node --test tests/*.test.mjs`; JSX parsing and server syntax checks passed. A read-only request to `/api/state` returned HTTP 200 with the expected sections, and malformed product requests returned HTTP 400 without database writes. No local build was run; deployed validation remains with the hosting pipeline.

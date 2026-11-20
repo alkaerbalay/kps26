@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { publicWorkspaceAccess } from './workspace-access.mjs';
+import { requestError, validateJsonBody } from './request-errors.mjs';
 import { bodyLimit } from 'hono/body-limit';
 import { getStore } from '@netlify/blobs';
 import { eq, desc, sql } from 'drizzle-orm';
@@ -15,8 +16,9 @@ const num=(v,min=0)=>{const n=Number(v);if(v===''||v===null||!Number.isFinite(n)
 const whole=v=>{const n=num(v);if(!Number.isInteger(n)||n>2000000000)fail('الكمية يجب أن تكون عدداً صحيحاً ضمن الحدود المسموحة');return n};
 const publicDoc=(doc,role)=>role==='sales'?{...doc,items:doc.items.map(({cost,...i})=>i)}:doc;
 const log=async(tx,actor,action)=>tx.insert(t.audit).values({actor,action});
-app.onError((err,c)=>c.json({error:err.status?err.message:'تعذر إكمال العملية. حاول مرة أخرى.'},err.status||500));
+app.onError((err,c)=>{const error=requestError(err);return c.json({error:error.message},error.status)});
 app.use('/api/*',publicWorkspaceAccess);
+app.use('/api/*',validateJsonBody);
 app.get('/api/state',async c=>{
  const result = await db.transaction(async tx=>{
  await tx.execute(sql`SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY`);
