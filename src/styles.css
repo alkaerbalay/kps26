@@ -38,3 +38,7 @@
 }
 
 .sidebar{overflow-y:auto}
+/* Direct workspace startup uses no sample business figures or account form. */
+.app-start{min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px;text-align:center;background:#f7f9f6;color:#155b47}
+.app-start h1{font-size:26px;margin:0}
+.app-start p{color:#66796f;margin:0}

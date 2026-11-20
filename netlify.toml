@@ -28,3 +28,9 @@ checkPaths = []
 package = "@netlify/plugin-lighthouse"
 [[plugins.inputs.audits]]
 path = "/"
+
+# UI plugins run first. Restore the Vite entry after the incompatible AMP
+# postprocessor, which strips the JavaScript needed to mount this React app.
+# Keep this last: verify the module script and its nonempty asset before deploy.
+[[plugins]]
+package = "./netlify/plugins/preserve-app-entry"
