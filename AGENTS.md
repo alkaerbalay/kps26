@@ -2,7 +2,7 @@
 
 This is Al-Kafeel Energy Solutions, an Arabic RTL internal solar inventory and sales management application. It is a React/Vite client with a Hono Netlify Server, not a full-stack framework template.
 
-- `src/main.jsx`: application layout, dashboard, department screens, forms, chart components, authenticated fetch flow, and print view.
+- `src/main.jsx`: application layout, dashboard, department screens, forms, chart components, direct API fetch flow, and print view.
 - `src/styles.css`: responsive layout and RTL design system; muted evergreen, warm gold, white panels; Tajawal typography. Desktop navigation is on the right. Includes print and reduced-motion styles.
 - `src/demo.js`: explicitly illustrative, read-only sample data; never persisted or mixed into real business state.
 - `netlify/server/index.mjs`: sole server entrypoint. All request-driven APIs live here under `/api/*`.
@@ -14,7 +14,7 @@ This is Al-Kafeel Energy Solutions, an Arabic RTL internal solar inventory and s
 
 Use Arabic user-facing copy and RTL logical positioning; document IDs are LTR. Store monetary values as Postgres numeric and quantities as integer. Preserve historical document snapshots. Update inventory and invoice collections inside transactions with row locks, and keep lock ordering stable. Never silently convert a quotation twice. Never allow a receipt above an invoice's remaining balance. Stock cannot be directly rewritten by the catalog editing endpoint.
 
-All private reads and writes require a remotely verified Netlify Identity JWT from the `nf_jwt` cookie. Never decode a JWT and trust its claims without verification. Confirmed email maps to team membership in the database; Identity's server-controlled `admin` role takes precedence. New registrations do not gain access automatically. First owner bootstrap happens in Netlify's Identity dashboard. Client navigation visibility is convenience; enforce every permission on the server. Sales responses omit product and document item costs. Cross-origin writes are rejected.
+The workspace intentionally allows full public read and write access without Netlify Identity, as explicitly requested by the owner. Every visitor receives the shared admin business context; team roles are directory metadata and do not restrict access. Never present a shared visitor as an authenticated person. Record anonymous operations as shared access in the audit trail. Cross-origin writes are rejected. API responses must remain uncached. No login, password recovery, or invitation screen is required.
 
 Persistence must use Netlify Database. Use `drizzle-orm@beta` and `drizzle-kit@beta` for the Netlify adapter. Any schema change requires a generated migration. Node 24 is required for Netlify Server and direct import of the plain TypeScript schema. Static files win over server routing; server is explicitly limited to `/api/*`. Do not add a catch-all SPA rewrite that captures API requests.
 
