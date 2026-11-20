@@ -88,3 +88,11 @@ The legacy UI-installed `netlify-plugin-a11y@0.0.12` uses Pa11y 5 to open build-
 `netlify.toml` overrides that legacy plugin's default scan with an empty `checkPaths` list, explicitly skipping its incompatible direct-file audit. The already installed Lighthouse plugin is explicitly configured to audit `/` over HTTP after deployment; its reports include accessibility. This replaces the old blocking Pa11y check with Lighthouse reporting, not an equivalent predeployment accessibility gate. Other build checks remain configured as before. TOML syntax and the targeted plugin settings were checked; no build or deployment command was run locally. The next hosting pipeline run must confirm deployment and produce the Lighthouse report.
 
 The HTML entry document uses an uppercase `DOCTYPE` and HTML-style void elements (`meta` and `link` without XML self-closing slashes), matching the deployment HTML validator. `html-validate@10.5.0 index.html` passed after fixing all 13 reported formatting errors. The application build was not run locally; the hosting pipeline validates the emitted document and remaining deployment plugins.
+
+## Application entry protection
+
+The public site returned HTTP 200 with an empty React root and no application script. The dashboard-installed `netlify-plugin-amp-server-side-rendering` had converted Vite's ordinary HTML to AMP and removed the JavaScript module that mounts the interface, explaining the blank page and Lighthouse's NO_FCP result.
+
+The local `preserve-app-entry` build plugin captures Vite's entry in `onBuild` and restores it in `onPostBuild` if AMP conversion occurs. It runs after the dashboard-installed plugins and rejects entries missing the compiled application script. Unconverted HTML remains untouched. Dashboard plugin removal was denied by the API, so this repository-level protection handles the installed postprocessor without changing access controls or business data. Keep this plugin after HTML postprocessors.
+
+`node --test tests/app-entry.test.mjs` passed two regression tests. A separate temporary-fixture check using the installed AMP optimizer reproduced script removal and verified exact restoration. No application build was run locally. The hosting pipeline must validate the deployment; the already published page remains affected until a corrected deployment is published.
